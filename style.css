@@ -1,0 +1,21 @@
+/* Página escura, canvas centralizado e escalado para caber na janela */
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #120c18;
+  overflow: hidden;
+}
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+canvas {
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: auto;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  outline: none;
+  image-rendering: pixelated;
+  box-shadow: 0 0 40px rgba(224, 122, 63, .25);
+}
