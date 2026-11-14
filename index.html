@@ -2,12 +2,28 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Mobile-first: sem zoom, ocupa a tela toda (inclusive área do notch) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#120c18">
   <title>As Quatro Chamas de Nzila - Vila Raiz</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <canvas id="c" width="960" height="540" tabindex="0"></canvas>
+
+  <!-- Controles touch (aparecem só em dispositivos com toque). Cada botão simula uma tecla do teclado. -->
+  <div id="touch">
+    <div id="dpad"><span class="a u">▲</span><span class="a d">▼</span><span class="a l">◀</span><span class="a r">▶</span><i id="knob"></i></div>
+    <button class="btn atk"   data-key="KeyJ">ATQ</button>
+    <button class="btn parry" data-key="KeyK">APARO</button>
+    <button class="btn dodge" data-key="KeyL">ESQ</button>
+    <button class="btn jump"  data-key="Space">PULO</button>
+    <button class="btn spec"  data-key="KeyI">ESP</button>
+    <button class="btn sup"   data-key="KeyO">SUPER</button>
+  </div>
+
+  <div id="rotate">Gire o aparelho para o modo paisagem ⟲</div>
   <script src="game.js"></script>
 </body>
 </html>

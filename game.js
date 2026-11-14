@@ -2,7 +2,10 @@
 /* =====================================================================
    AS QUATRO CHAMAS DE NZILA — Vertical Slice "Vila Raiz"
    Canvas puro + JavaScript puro. Arte 100% geométrica (placeholders).
-   Controles: setas/WASD mover | Shift correr | Espaço pular
+   TOUCH (Android/Chrome): D-Pad à esquerda (empurre até a borda = correr),
+              botões ATQ / APARO / ESQ / PULO / ESP / SUPER à direita.
+              Toque na tela para iniciar / reiniciar.
+   TECLADO: setas/WASD mover | Shift correr | Espaço pular
               J atacar (combo de 3) | K aparo | L esquiva
               I especial (20 Eco) | O super (100 Eco) | R reiniciar
    ===================================================================== */
@@ -30,11 +33,61 @@ addEventListener('keyup', e => keys[e.code] = 0);
 const down = (...c) => c.some(k => keys[k]);
 const hit = (...c) => c.some(k => press[k]);
 
+// ---------- Controles touch ----------
+// Cada botão/D-Pad apenas liga/desliga os mesmos códigos de tecla do teclado.
+const IS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+if (IS_TOUCH) document.body.classList.add('touch');
+function setKey(code, on) { if (on && !keys[code]) press[code] = 1; keys[code] = on ? 1 : 0; }
+
+// Botões de ação (multi-toque via Pointer Events)
+document.querySelectorAll('[data-key]').forEach(b => {
+  const code = b.dataset.key;
+  const up = () => { setKey(code, 0); b.classList.remove('on'); };
+  b.addEventListener('pointerdown', e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (x) {} setKey(code, 1); b.classList.add('on'); });
+  b.addEventListener('pointerup', up);
+  b.addEventListener('pointercancel', up);
+  b.addEventListener('lostpointercapture', up);
+});
+
+// D-Pad virtual analógico de 8 direções: distância > 72% do raio = correr (Shift)
+const dp = document.getElementById('dpad'), knob = document.getElementById('knob');
+let dpId = null;
+function dpUpdate(e) {
+  const r = dp.getBoundingClientRect(), R = r.width / 2;
+  let dx = e.clientX - (r.left + R), dy = e.clientY - (r.top + R); const d = Math.hypot(dx, dy) || 1;
+  const on = d > R * .18;
+  setKey('ArrowLeft', on && dx / d < -.38); setKey('ArrowRight', on && dx / d > .38);
+  setKey('ArrowUp', on && dy / d < -.38);   setKey('ArrowDown', on && dy / d > .38);
+  setKey('ShiftLeft', on && d > R * .72);
+  const k = Math.min(d, R * .6); knob.style.transform = 'translate(' + (dx / d * k) + 'px,' + (dy / d * k) + 'px)';
+}
+function dpEnd() {
+  dpId = null; knob.style.transform = '';
+  ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'ShiftLeft'].forEach(k => setKey(k, 0));
+}
+dp.addEventListener('pointerdown', e => { e.preventDefault(); dpId = e.pointerId; try { dp.setPointerCapture(e.pointerId); } catch (x) {} dpUpdate(e); });
+dp.addEventListener('pointermove', e => { if (e.pointerId === dpId) dpUpdate(e); });
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => dp.addEventListener(t, e => { if (e.pointerId === dpId) dpEnd(); }));
+
+// Toque na tela (fora dos botões) inicia/reinicia; primeiro toque tenta tela cheia + paisagem
+C.addEventListener('pointerdown', () => { if (G.scene !== 'play') { press.Enter = 1; press.KeyR = 1; } });
+C.addEventListener('pointerup', () => {
+  if (!IS_TOUCH || document.fullscreenElement) return;
+  try {
+    document.documentElement.requestFullscreen().then(() => screen.orientation.lock('landscape')).catch(() => {});
+  } catch (x) {}
+});
+// Evita menu de contexto/zoom por gesto e limpa teclas ao perder o foco
+addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('gesturestart', e => e.preventDefault());
+addEventListener('blur', () => { for (const k in keys) keys[k] = 0; });
+document.addEventListener('visibilitychange', () => { last = performance.now(); });
+
 // ---------- Áudio mínimo (beeps) ----------
 let AC;
 function sfx(f, d = .08, type = 'square') {
   try {
-    AC = AC || new AudioContext();
+    AC = AC || new AudioContext(); if (AC.state === 'suspended') AC.resume();
     const o = AC.createOscillator(), g = AC.createGain();
     o.type = type; o.frequency.value = f; g.gain.value = .04;
     o.connect(g); g.connect(AC.destination);
@@ -350,7 +403,7 @@ function bar(x, y, w, h, v, col, bg = '#1c1420') {
   X.fillStyle = bg; X.fillRect(x, y, w, h); X.fillStyle = col; X.fillRect(x, y, w * clamp(v, 0, 1), h);
   X.strokeStyle = '#000'; X.lineWidth = 2; X.strokeRect(x, y, w, h);
 }
-function txt(t, x, y, size = 14, col = '#fff', al = 'left') { X.font = 'bold ' + size + 'px sans-serif'; X.textAlign = al; X.fillStyle = col; X.fillText(t, x, y); }
+function txt(t, x, y, size = 14, col = '#fff', al = 'left') { if (IS_TOUCH && size <= 14) size = Math.round(size * 1.25); X.font = 'bold ' + size + 'px sans-serif'; X.textAlign = al; X.fillStyle = col; X.fillText(t, x, y); }
 function drawHUD() {
   txt('AKIN', 20, 24, 14, '#ffd36b');
   bar(20, 30, 220, 16, P.hp / P.mhp, '#d8453a');                    txt('Vida', 246, 43, 11);
@@ -364,7 +417,7 @@ function drawHUD() {
   const b = E.find(e => e.t === 'boss');
   if (b) { txt(TYPES.boss.n + (b.ph2 ? ' — Fase 2' : ''), W / 2, 24, 14, '#f2e8c9', 'center'); bar(W / 2 - 200, 30, 400, 14, b.hp / b.mhp, b.ph2 ? '#c24b3a' : '#d8d0bb'); }
   if (G.msgT > 0) txt(G.msg, W / 2, 110, 22, '#fff', 'center');
-  txt('J atacar  K aparo(133ms)  L esquiva  I especial  O super  Espaço pular  Shift correr', W / 2, H - 10, 12, 'rgba(255,255,255,.6)', 'center');
+  if (!IS_TOUCH) txt('J atacar  K aparo(133ms)  L esquiva  I especial  O super  Espaço pular  Shift correr', W / 2, H - 10, 12, 'rgba(255,255,255,.6)', 'center');
 }
 function overlay(title, lines, col) {
   X.fillStyle = 'rgba(10,6,16,.82)'; X.fillRect(0, 0, W, H);
@@ -389,9 +442,9 @@ function draw() {
     if (G.flash > 0) { X.fillStyle = 'rgba(255,255,255,' + G.flash * .8 + ')'; X.fillRect(0, 0, W, H); }
   }
   X.restore();
-  if (G.scene === 'title') overlay('AS QUATRO CHAMAS DE NZILA', ['Vertical Slice — Vila Raiz', '', 'Setas/WASD mover · Shift correr · Espaço pular · L esquiva', 'J atacar (combo de 3) · K aparo (janela de 133ms) · I especial · O super', 'Aparo perfeito = sem dano + 6 Eco. Eco cheio ou 50 hits = Groove.', '', 'Pressione ENTER para começar'], '#ffb347');
-  if (G.scene === 'dead') overlay('DERROTADO', ['Os Desbotados apagaram a chama de Akin...', 'Pressione R para tentar de novo'], '#e44');
-  if (G.scene === 'win') overlay('VILA RAIZ SALVA!', ['Vó Mabeki acolhe Akin. A primeira chama voltou a arder.', 'Tempo: ' + Math.floor(G.t / 60) + 'm' + Math.floor(G.t % 60) + 's · Inimigos: ' + G.kills + ' · Aparos perfeitos: ' + G.parries, '', 'Pressione R para jogar de novo'], '#ffd36b');
+  if (G.scene === 'title') overlay('AS QUATRO CHAMAS DE NZILA', ['Vertical Slice — Vila Raiz', '', IS_TOUCH ? 'D-Pad move (empurre até a borda para correr)' : 'Setas/WASD mover · Shift correr · Espaço pular · L esquiva', IS_TOUCH ? 'ATQ combo de 3 · APARO (133ms) · ESQ · PULO · ESP · SUPER' : 'J atacar (combo de 3) · K aparo (janela de 133ms) · I especial · O super', 'Aparo perfeito = sem dano + 6 Eco. Eco cheio ou 50 hits = Groove.', '', IS_TOUCH ? 'Toque na tela para começar' : 'Pressione ENTER para começar'], '#ffb347');
+  if (G.scene === 'dead') overlay('DERROTADO', ['Os Desbotados apagaram a chama de Akin...', IS_TOUCH ? 'Toque na tela para tentar de novo' : 'Pressione R para tentar de novo'], '#e44');
+  if (G.scene === 'win') overlay('VILA RAIZ SALVA!', ['Vó Mabeki acolhe Akin. A primeira chama voltou a arder.', 'Tempo: ' + Math.floor(G.t / 60) + 'm' + Math.floor(G.t % 60) + 's · Inimigos: ' + G.kills + ' · Aparos perfeitos: ' + G.parries, '', IS_TOUCH ? 'Toque na tela para jogar de novo' : 'Pressione R para jogar de novo'], '#ffd36b');
 }
 
 // ---------- Loop principal ----------
